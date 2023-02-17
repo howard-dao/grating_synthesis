@@ -223,7 +223,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             fill_top_bot_ratio  = [];
             guess_offset        = 0;
             
-            % number of times to iterate over optimizatio loop
+            % number of times to iterate over optimization loop
             n_optimize_loops = 2;
             
             % sort fills so they are in descending order
@@ -273,7 +273,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             % match to desired output angle
             k0              = obj.background_index * ( 2*pi/obj.lambda );
             kx              = k0 * sin( (pi/180) * obj.optimal_angle );
-            guess_period    = 2*pi/(waveguide_k- kx);                                               % units of 'units'
+            guess_period    = 2*pi/(waveguide_k - kx);                                              % units of 'units'
             
             % snap period to discretization
             guess_period = obj.discretization * round(guess_period/obj.discretization);
