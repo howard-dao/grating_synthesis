@@ -34,6 +34,16 @@ figure_name = [ 'scatter_str_v_ff' fig_suffix ];
 makeFigureNice();
 save_fig_multiformat( gcf, save_plots_path, figure_name );
 
+% predicted best MFD vs. fill for uniform designs
+figure;
+plot( synth_obj.sweep_variables.fill_ratios_to_sweep, ...
+         2./(1.4625*real(synth_obj.sweep_variables.scatter_str_vs_fill)), '-o' );
+xlabel('fill factor'); ylabel('MFD');
+title('predicted best MFD vs. fill factors for unif design');
+figure_name = [ 'best_MFD_v_ff' fig_suffix ];
+makeFigureNice();
+save_fig_multiformat( gcf, save_plots_path, figure_name );
+
 % period vs. fill
 figure;
 plot( synth_obj.sweep_variables.fill_ratios_to_sweep, ...

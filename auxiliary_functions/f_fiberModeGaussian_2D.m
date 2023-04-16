@@ -4,7 +4,7 @@ function [E, H] = f_fiberModeGaussian_2D( w0, lambda0, xvec, zvec, theta, d0, nc
 % Generate Gaussian-beam mode profile at a plane through y = d0 at angle of
 % theta (in degrees)
 %
-% the coordinate system is a bit confusing - z = direction of grating =
+% the coordinate system is a bit confusing - z = longitudinal direction of grating =
 % direction the fiber is tilted in
 % x = the other transverse dimension of the fiber
 %
@@ -22,36 +22,25 @@ function [E, H] = f_fiberModeGaussian_2D( w0, lambda0, xvec, zvec, theta, d0, nc
 % Inputs:   
 %   w0  
 %       type: double, scalar
-%       desc: 1/e beam RADIUS at waist, in units 'units' (MFD/2)
-%           
+%       desc: 1/e beam RADIUS at waist, in units 'units' (MFD/2)         
 %   lambda0
 %       type: double, scalar
 %       desc: free space wavelength, in units 'units'
-%
 %   xvec
 %       type: double, array
 %       desc: x coordinates, n by 1
-%
 %   zvec
 %       type: double, array
-%       desc: z coordinates, n by 1
-%
-%   unit_scale
-%       type: double, scalar
-%       desc: scaling factor, such that 'units' * unit_scale = meters
-%           
+%       desc: z coordinates, n by 1    
 %   theta 
 %       type: double, scalar
 %       desc: angle from normal in degrees (in the yz plane)
-%
 %   d0  
 %       type: double, scalar
 %       desc: distance from beam waist to slice
-%
 %   nclad 
 %       type: double, scalar
 %       desc: cladding index
-%
 %
 % Outputs: 
 %   E - struct with x, y, z components

@@ -51,10 +51,6 @@ classdef c_bloch_cell
         dx;                 
         %> discretization in y (transverse direction)
         dy;
-        %> name and scaling of spatial units, supports 'm', 'mm', 'um', 'nm'
-%         units;
-        %> free space wavelength, units 'units'
-%         lambda;
         %> [ max_y, max_x ], where y = transverse and x = direction of propagation
         domain_size;
         %> vector of x coordinates (dir of prop)
@@ -71,6 +67,7 @@ classdef c_bloch_cell
         %>                     PML_options(2): length of PML layer in nm \n
         %>                     PML_options(3): strength of PML in the complex plane \n
         %>                     PML_options(4): PML polynomial order (1, 2, 3...) \n
+        %   'k0'
         sim_opts;
         
         %> mode characteristics
@@ -101,6 +98,13 @@ classdef c_bloch_cell
         debug;
         background_index
         
+        % constants
+        mu0 = 4*pi*1e-7; % units of H/m
+        c   = 299792458; % units of m/s
+        
+        % estimated reflection
+        R_est
+        
     end     % end properties
     
     
@@ -110,14 +114,6 @@ classdef c_bloch_cell
         %> Constructor
         function obj = c_bloch_cell( varargin )
             
-            % parse inputs
-%             inputs = {  'discretization',   'none', ...
-%                         'units',            'um',   ...
-%                         'lambda',           'none', ...
-%                         'background_index', 1.0,    ...
-%                         'domain_size',      'none', ...
-%                         'numcells',         10 ...
-%                      }; 
             inputs = {  'discretization',   'none', ...
                         'background_index', 1.0,    ...
                         'domain_size',      'none', ...
@@ -139,20 +135,6 @@ classdef c_bloch_cell
             else
                 error('Input ''discretization'' must either be a scaler or a 1x2 vector');
             end
-
-%             obj.units.name  = p.units;
-%             switch( obj.units.name )
-%                 case 'm'
-%                     obj.units.scale = 1;
-%                 case 'mm'
-%                     obj.units.scale = 1e-3;
-%                 case 'um'
-%                     obj.units.scale = 1e-6;
-%                 case 'nm'
-%                     obj.units.scale = 1e-9;
-%             end
-
-%             obj.lambda = p.lambda;
             
             % new version of creating background dielectric that rounds
             % the dimensions
@@ -374,14 +356,25 @@ classdef c_bloch_cell
                 % grab this mode, including phase
                 this_mode   = obj.Phi_vs_mode(:,:,mode_num) .* repmat( exp( 1i * obj.x_coords * real(obj.k_vs_mode( mode_num ) )), ny_this_mode, 1 );
             
-                % zero pad
-                mode_to_overlap_pad = padarray( mode_to_overlap, [ floor(ny_this_mode/2), floor(nx_this_mode/2) ], 0, 'pre' );
-                mode_to_overlap_pad = padarray( mode_to_overlap_pad, [ ceil(ny_this_mode/2), ceil(nx_this_mode/2) ], 0, 'post' );
-                this_mode_pad       = padarray( this_mode, [ floor(ny_mode_to_overlap/2), floor(nx_mode_to_overlap/2) ], 0, 'pre' );
-                this_mode_pad       = padarray( this_mode_pad, [ ceil(ny_mode_to_overlap/2), ceil(nx_mode_to_overlap/2) ], 0, 'post' );
+                % reshape this mode to have same size as that to overlap
+                this_mode_reshape = zeros(size(mode_to_overlap));
+                if size(mode_to_overlap, 2) > size(this_mode, 2)
+                    % reshaped matrix will have trailing zeros in x
+                    this_mode_reshape(:,1:size(this_mode,2)) = this_mode;
+                else
+                    % reshaped matrix will be cut off in x
+                    this_mode_reshape(:,:) = this_mode(:,1:size(mode_to_overlap,2));
+                end
+                
+%                 % zero pad
+%                 mode_to_overlap_pad = padarray( mode_to_overlap, [ floor(ny_this_mode/2), floor(nx_this_mode/2) ], 0, 'pre' );
+%                 mode_to_overlap_pad = padarray( mode_to_overlap_pad, [ ceil(ny_this_mode/2), ceil(nx_this_mode/2) ], 0, 'post' );
+%                 this_mode_pad       = padarray( this_mode, [ floor(ny_mode_to_overlap/2), floor(nx_mode_to_overlap/2) ], 0, 'pre' );
+%                 this_mode_pad       = padarray( this_mode_pad, [ ceil(ny_mode_to_overlap/2), ceil(nx_mode_to_overlap/2) ], 0, 'post' );
             
                 % x-correlate
-                mode_xcorr = ifftshift( ifft2( conj( fft2( mode_to_overlap_pad ) ) .* fft2( this_mode_pad ) ) );
+%                 mode_xcorr = ifftshift( ifft2( conj( fft2( mode_to_overlap_pad ) ) .* fft2( this_mode_pad ) ) );
+                mode_xcorr = ifftshift( ifft2( conj( fft2( mode_to_overlap ) ) .* fft2( this_mode_reshape ) ) );
                 
                 % save max overlap
                 max_overlaps( mode_num ) = max( abs( mode_xcorr(:) ) );
@@ -414,6 +407,59 @@ classdef c_bloch_cell
             E_z             = repmat( Phi, 1, num_cells ).*phase_all;
             
         end     % end function stitch_E_field()
+        
+        function [obj, H_x, H_y] = calc_H( obj, n_periods, k0 )
+            % Calculates H field from the pre-chosen mode
+            % note the grid positions
+            
+            [obj, E_z] = obj.stitch_E_field( obj.Phi, obj.k, n_periods );
+            
+            % add to Ez_onecell Ez( -dx ) and Ez( end + dx ) to calculate H
+            xcoords         = 0 : obj.dx : round((n_periods*obj.domain_size(2) - obj.dx));
+            E_z_neg1        = obj.Phi( :, end ) .* exp( 1i * obj.k * (xcoords(1)-obj.dx) );
+            E_z_plus        = obj.Phi( :, 1 ) .* exp( 1i * obj.k * (xcoords(end)+obj.dx) );
+            Ez_wbounds      = [ E_z_neg1, E_z, E_z_plus ];
+            
+            % H y, on second to end-1 steps, using entire E_z
+            % dimensions y vs. x
+            H_y = (1i/(k0 * obj.c * obj.mu0)) * ( Ez_wbounds( :, 3:end ) - Ez_wbounds( :, 1:end-2 ) )/(2*obj.dx);   % dx, on same grid as Ez_onecell
+            
+            % H_x
+            % dimensions H_x vs. y(2:end-1) vs x
+            H_x  = 1/(1i * k0 * obj.c * obj.mu0) .* ( E_z( 3:end,:) - E_z( 1:end-2,:) )/(2*obj.dy);
+            
+        end
+        
+        function [obj, R_est] = estimate_reflection( obj, nclad )
+            % estimates reflection from FT of bloch mode
+            %
+            % inputs
+            %   nclad: (scalar double) cladding index to compute reflection
+            %       before
+            
+            % get # of periods in x
+%             alpha = imag(obj.k);
+%             nalphas = 4;
+%             n_periods = round( nalphas*(1/alpha)/period );
+            n_periods = 30; % kind of arbitrary value
+            
+            % get E fields
+            [obj, Ez] = obj.stitch_E_field( obj.Phi, obj.k, n_periods );
+            
+            % fft
+            Ez_kspace = ifftshift( fft2( fftshift( Ez ) ) );
+            kx = 2*pi * linspace( -1/(2*obj.dx), 1/(2*obj.dx), size(Ez_kspace,2) );
+%             ky = 2*pi * linspace( -1/(2*obj.dy), 1/(2*obj.dy), size(Ez_kspace,1) );
+            
+            % calculate estimated reflection by integrating Ez(k)^2 to the left of k0 sin
+            k0_nclad = nclad*obj.sim_opts.k0;
+            int_Ezsq_kleft = sum(abs(Ez_kspace(:,kx < -k0_nclad)).^2, 'all');
+            int_Ezsq = sum(abs(Ez_kspace(:,:)).^2, 'all');
+            R_est = int_Ezsq_kleft./int_Ezsq;
+            
+            obj.R_est = R_est;
+            
+        end
         
         % -----------------
         %> Circularly shifts the index by the shift length
