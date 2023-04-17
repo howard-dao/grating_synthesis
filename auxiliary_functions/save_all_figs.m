@@ -9,9 +9,4 @@ for ii = 1:length(figs)
     save_fig_multiformat( figs(ii), save_plots_path, get(figs(ii), 'Name' ), true );
 end
 
-<<<<<<< HEAD
 end
-=======
-end
-
->>>>>>> b44a255
