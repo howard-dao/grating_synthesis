@@ -149,17 +149,7 @@ classdef c_synthGrating
         function obj = c_synthGrating(varargin)
             % Constructor
             % See top comments for input documentation
-            
-%             % Dependency imports
-%             fname           = mfilename;                                            % name of class
-%             fpath           = mfilename('fullpath');                                % full path, including fname
-%             projectpath     = erase( fpath, [ 'main' filesep fname] );              % now only holds path to project's code
-%             % path to emeSim
-%             addpath([ projectpath 'eme' ]);
-%             % path to parfor progress monitor
-%             addpath([ projectpath 'auxiliary_functions' filesep 'ParforProgMon' ]);
-            
-
+              
             % inputs and defaults
             inputs = {  'discretization',   'none', ...
                         'lambda',           'none', ...
@@ -177,19 +167,6 @@ classdef c_synthGrating
 
             % save starting time
             obj.start_time = datestr( datetime('now'), 'yyyy_mm_dd_HH_MM_SS_' );
-
-            % set units
-%             obj.units.name  = p.units;
-%             switch( obj.units.name )
-%                 case 'm'
-%                     obj.units.scale = 1;
-%                 case 'mm'
-%                     obj.units.scale = 1e-3;
-%                 case 'um'
-%                     obj.units.scale = 1e-6;
-%                 case 'nm'
-%                     obj.units.scale = 1e-9;
-%             end
 
             % set other properties
             obj.discretization      = p.discretization;
@@ -218,10 +195,8 @@ classdef c_synthGrating
         function save_to_struct(obj, filename)
             % Saves all current properties of this object to a structure,
             % and then to a .mat file
-            
             sweep_obj = obj.convertObjToStruct();
             save(filename, 'sweep_obj');
-
         end
         
         
@@ -290,16 +265,12 @@ classdef c_synthGrating
             % Constants, in units of meters
             lambda  = obj.lambda/nclad; % * obj.units.scale / nclad;     % wavelength in cladding, units m
             k0      = 2*pi/lambda;                              % 1/m
-%             w0      = w0; % * obj.units.scale;                     % [meters] radius
-%             d0      = d0; % * obj.units.scale;                     % [meters] offset
             
             % Convert to radians
             theta = (pi/180)*theta;
             
-            % Scale coordinates
-%             xvec = xvec * obj.units.scale;                                              % units m
+            % Scale coordinates% units m
             yvec = xvec;
-%             zvec = zvec * obj.units.scale;                                              % units m
             
             % dimensions in frame of gaussian beam optical axis 
             xprime = xvec.*cos(-theta) + d0*sin(-theta);
@@ -318,7 +289,6 @@ classdef c_synthGrating
             
             % return and save data
             u       = u00_slice;
-%             obj.u   = u;
 
         end     % end fiber_mode_gaussian()
         
@@ -361,10 +331,6 @@ classdef c_synthGrating
             
             % grab waveguide k
             waveguide_k = waveguide.k;                                      % units of rad/'units'                    
-            
-%             % DEBUG plot stuff
-%             waveguide.plotEz_w_edges();
-%             title('DEBUG waveguide, thick (normal)');
             
             % calculate analytical period which would approximately phase
             % match to desired output angle
@@ -939,19 +905,12 @@ classdef c_synthGrating
 %             alpha_des       = (1/2)*( abs(u).^2 ) ./ ( 1 + 1e-9 - integral_f );             % in units 1/m
             alpha_des       = (1/2)*( abs(field_profile).^2 ) ./ ( 1 - integral_f );             % in units 1/units
 %             alpha_des       = alpha_des * obj.units.scale;                                  % in units 1/units
-            
-%             % debugging
-%             figure; plot(xvec, alpha_des); hold on;
 % 
             % limit the xvec and alpha to certain radiated output threshold
             threshold   = 1 - 1e-30;
             xvec        = xvec( integral_f <= threshold );
             alpha_des   = alpha_des( integral_f <= threshold );
             field_profile = field_profile( integral_f <= threshold );
-%             
-%             plot(xvec, alpha_des);
-            
-            % limit xvec and alpha to 
             
             % save the xvec, alpha, and field as variables of final
             % syntheiszed design

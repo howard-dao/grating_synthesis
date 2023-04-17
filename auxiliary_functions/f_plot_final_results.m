@@ -352,7 +352,7 @@ switch synth_obj.coupling_direction
     case 'up'
         plot( fdtd_results.lambda * 1e6, fdtd_results.T_down, '-o' );
         plot( fdtd_results.lambda * 1e6, fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_down, '--o' );
-        legend('total R', 'R into waveguide', 'total down', 'total thru', 'total lost');
+        legend('total R', 'R into waveguide', 'total thru', 'total down', 'total lost');
     case 'down'
         plot( fdtd_results.lambda * 1e6, fdtd_results.T_up, '-o' );
         plot( fdtd_results.lambda * 1e6, fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_up, '--o' );
@@ -360,6 +360,44 @@ switch synth_obj.coupling_direction
 end
 xlabel('\lambda (\mu m)'); ylabel('power transmission');
 title('Losses');
+makeFigureNice();  
+
+% reflection, transmission, IL dB
+figure('name', 'otherloss_ILdB');
+plot( fdtd_results.lambda * 1e6, -10*log10(1-abs(fdtd_results.R)), '-o' ); hold on;
+plot( fdtd_results.lambda * 1e6, -10*log10(1-abs(fdtd_results.R_wg)), '-o' );
+plot( fdtd_results.lambda * 1e6, -10*log10(1-fdtd_results.T_thru), '-o' );
+switch synth_obj.coupling_direction
+    case 'up'
+        plot( fdtd_results.lambda * 1e6, -10*log10(1-fdtd_results.T_down), '-o' );
+        plot( fdtd_results.lambda * 1e6, -10*log10(1 - (fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_down)), '--o' );
+        legend('total R', 'R into waveguide', 'total down', 'total thru', 'total lost');
+    case 'down'
+        plot( fdtd_results.lambda * 1e6, -10*log10(1-fdtd_results.T_up), '-o' );
+        plot( fdtd_results.lambda * 1e6, -10*log10(1-(fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_up)), '--o' );
+        legend('total R', 'R into waveguide', 'total thru', 'total up', 'total lost');
+end
+xlabel('\lambda (\mu m)'); ylabel('power transmission');
+title('Losses (IL dB)');
+makeFigureNice();  
+
+% reflection, transmission, dB
+figure('name', 'otherloss_dB');
+plot( fdtd_results.lambda * 1e6, 10*log10(abs(fdtd_results.R)), '-o' ); hold on;
+plot( fdtd_results.lambda * 1e6, 10*log10(abs(fdtd_results.R_wg)), '-o' );
+plot( fdtd_results.lambda * 1e6, 10*log10(fdtd_results.T_thru), '-o' );
+switch synth_obj.coupling_direction
+    case 'up'
+        plot( fdtd_results.lambda * 1e6, 10*log10(fdtd_results.T_down), '-o' );
+        plot( fdtd_results.lambda * 1e6, 10*log10(fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_down), '--o' );
+        legend('total R', 'R into waveguide', 'total down', 'total thru', 'total lost');
+    case 'down'
+        plot( fdtd_results.lambda * 1e6, 10*log10(fdtd_results.T_up), '-o' );
+        plot( fdtd_results.lambda * 1e6, 10*log10(fdtd_results.T_thru + abs(fdtd_results.R) + fdtd_results.T_up), '--o' );
+        legend('total R', 'R into waveguide', 'total thru', 'total up', 'total lost');
+end
+xlabel('\lambda (\mu m)'); ylabel('power transmission');
+title('Losses (T dB)');
 makeFigureNice();  
 
 % simulated index distribution

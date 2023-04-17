@@ -194,11 +194,14 @@ classdef c_synthTwoLevelGrating < c_synthGrating
         %>   fill_tops
         %>       type: double, array
         %>       desc: OPTIONAL Currently mostly for testing
+        %   nworkers
+        %       type: int, scalar
+        %       desc: # of parallel workers to use (optional)
         %>   verbose
         %>       type: double, array
         %>       desc: OPTIONAL Currently mostly for testing, spits out
         %>             a bunch of stuff to the prompt
-        function obj = generate_design_space( obj, fill_bots, fill_tops, verbose )
+        function obj = generate_design_space( obj, fill_bots, fill_tops, nworkers, verbose )
             
             tic;
             fprintf('Sweeping fill factors for directivity and angle...\n');
@@ -245,6 +248,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             GC_vs_fills             = cell( length( fill_bots ), length( fill_tops ) );      % dimensions bot fill vs. top fill
             dir_b4_period_vs_fills  = zeros( length( fill_bots ), length( fill_tops ) );     % dimensions bot fill vs. top fill
             prad_pin_vs_fills       = zeros( length( fill_bots ), length( fill_tops ) );     % dimensions bot fill vs. top fill
+            R_vs_fills              = zeros( length( fill_bots ), length( fill_tops ) );     % dimensions bot fill vs. top fill
             
             % make grating cell, assuming both layers are filled
             waveguide = obj.h_makeGratingCell( obj.discretization, ...
@@ -278,8 +282,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             % snap period to discretization
             guess_period = obj.discretization * round(guess_period/obj.discretization);
             
-            % ugh this is really annoying but i have to - extend the
-            % waveguide's e z overlap
+            % extend waveguide's ez for overlap
             [ waveguide, e_z_overlap_ext ]  = ...
                 waveguide.stitch_E_field( waveguide.Phi, real(waveguide.k), round(guess_period/waveguide.domain_size(2)) );
             waveguide.E_z_for_overlap       = e_z_overlap_ext;
@@ -330,13 +333,14 @@ classdef c_synthTwoLevelGrating < c_synthGrating
                     offsets_vs_fills( i_ff_bot, 1 ) = guess_offset;
                     GC_vs_fills{ i_ff_bot, 1 }      = guess_GC;
                     k_vs_fills( i_ff_bot, 1 )       = guessk;
+                    [~,R_vs_fills( i_ff_bot, 1 )]   = guess_GC.estimate_reflection(obj.background_index);
                     
                     if strcmp( obj.coupling_direction, 'up' )
                         prad_pin_vs_fills( i_ff_bot, 1 ) = guess_GC.P_rad_up/guess_GC.P_in;
                     else
                         prad_pin_vs_fills( i_ff_bot, 1 ) = guess_GC.P_rad_down/guess_GC.P_in;
                     end
-                    
+
                 else
                     % at least one of the layers is not perturbed, so there is no optimization to run
                     % save dummy values
@@ -368,7 +372,12 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             n_fill_tops    = length(fill_tops);
 
             % start up parallel pool
-            obj = obj.start_parpool();
+            if ~exist('nworkers', 'var')
+                obj = obj.start_parpool();
+            else
+                obj = obj.start_parpool(nworkers);
+            end
+            
             
             % now fill in the rest of the domain
             parfor i_ff_bot = 1:n_fill_bots
@@ -427,6 +436,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
 %                         GC_vs_fills{ i_ff_bot, i_ff_ratio }             = best_GC;
                         k_vs_fills( i_ff_bot, i_ff_top )              = guessk;
                         dir_b4_period_vs_fills( i_ff_bot, i_ff_top )  = dir_b4_period_vs_fill;
+                        [~,R_vs_fills( i_ff_bot, i_ff_top )]          = guess_GC.estimate_reflection(obj.background_index);
                         if strcmp( obj.coupling_direction, 'up' )
                             prad_pin_vs_fills( i_ff_bot, i_ff_top ) = guess_GC.P_rad_up/guess_GC.P_in;
                         else
@@ -459,6 +469,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             obj.sweep_variables.k_vs_fills              = k_vs_fills;
             obj.sweep_variables.dir_b4_period_vs_fills  = dir_b4_period_vs_fills;
             obj.sweep_variables.prad_pin_vs_fills       = prad_pin_vs_fills;
+            obj.sweep_variables.R_vs_fills              = R_vs_fills;
 
             fprintf('Done generating design space\n');
             toc;
@@ -467,7 +478,7 @@ classdef c_synthTwoLevelGrating < c_synthGrating
         
         
         
-        function obj = start_parpool( obj )
+        function obj = start_parpool( obj, nworkers )
             % convenience function for starting up a parallel pool
             
             % start a parallel pool session
@@ -483,7 +494,11 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             end
             % Automatically selects number of works to the max that the
             % cluster supports
-            parpool(my_cluster, my_cluster.NumWorkers);
+            if nargin < 2
+                parpool(my_cluster, my_cluster.NumWorkers);
+            else
+                parpool(my_cluster, nworkers); % temporary
+            end
             
         end     % end start_parpool()
 
@@ -992,7 +1007,49 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             
         end     % end generate_final_design_uniform()
           
-                    
+        function obj = generate_final_design_uniform_selectedfills( obj, input_wg_type, filltop, fillbot )
+            % generate a final uniform design from user selected fills
+            % inputs:
+            %   input_wg_type
+            %       type: string
+            %       desc: 'bottom', 'top', 'full' or 'none'. mainly for
+            %       documentation purposes
+            %   filltop
+            %       type: double, scalar
+            %       desc: top layer fill (duty cycle) to use
+            %   fillbot
+            %       type: double, scalar
+            %       desc: bottom layer fill (duty cycle) to use
+                               
+            directivities   = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.directivities_vs_fills, filltop, fillbot );
+            angles          = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.angles_vs_fills, filltop, fillbot ); 
+            periods         = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.periods_vs_fills, filltop, fillbot );
+            offsets         = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.offsets_vs_fills, filltop, fillbot );
+            scatter_strs    = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.scatter_str_vs_fills, filltop, fillbot );
+            ks              = interp2( obj.sweep_variables.fill_tops, obj.sweep_variables.fill_bots, obj.sweep_variables.k_vs_fills, filltop, fillbot );
+            
+            % generate final design
+            grat_len            = 4./scatter_strs;
+            xvec                = 0 : obj.discretization : grat_len - obj.discretization;
+            alpha_des           = scatter_strs .* ones( size( xvec ) );
+            [ obj, synthesized_des ] = obj.pick_final_datapoints( xvec, alpha_des, ...
+                                             directivities, ...
+                                             fillbot, ...
+                                             filltop, ...
+                                             offsets, ...
+                                             periods, ...
+                                             angles, ...
+                                             scatter_strs, ...
+                                             ks );
+            obj.synthesized_design = synthesized_des;
+            obj.synthesized_design.input_wg_type = input_wg_type;
+            
+            % build final index distribution
+            obj = obj.build_final_index();
+
+        end
+    
+
         function obj = generate_final_design_uniform_gaussian( obj, MFD, input_wg_type, enforce_min_feat_size_func, filltop, fillbot )
             % Synthesizes a uniform grating that radiates desired Gaussian field profile
             %
@@ -1009,10 +1066,10 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             %               currently this function must take 2 args - ( period, fill ) 
             %   filltop
             %       type: double, scalar
-            %       desc: OPTIONAL fill to use
+            %       desc: OPTIONAL fill threshold to use
             %   fillbot
             %       type: double, scalar
-            %       desc: OPTIONAL fill to use
+            %       desc: OPTIONAL fill threshold to use
             
             % generate a fiber gaussian mode
             [ obj, field_profile ] = obj.make_gaussian_profile( MFD );
@@ -1061,13 +1118,22 @@ classdef c_synthTwoLevelGrating < c_synthGrating
             if nargin < 6
                 fill_vs_top_bot_both = 'top';
             end
+            
+            % remove unit cells that don't comply with min feature rules
+            for i_bot = 1:size(bot_fills,1)
+                for i_top = 1:size(top_fills,2)
+                    if ~enforce_min_feat_size_func( periods(i_bot,i_top),...
+                                                    top_fills(i_bot,i_top), bot_fills(i_bot,i_top), offsets(i_bot,i_top) )
+                        directivities(i_bot,i_top) = 0;
+                    end
+                end
+            end
 
             % for each top fill, pick bottom fill with highest
             % directivity
             [ chosen_dirs_vs_top, indx_highest_dir_per_topfill ] = max( directivities, [], 1 );
             % gotta use linear indexing
             indxs_vs_top               = sub2ind( size(directivities), indx_highest_dir_per_topfill, 1:size(directivities,2)  );
-
 
             % for each bottom fill, pick top fill
             % with highest directivity
